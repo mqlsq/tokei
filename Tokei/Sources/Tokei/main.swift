@@ -447,6 +447,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                     let showQoderCliCN = ud.object(forKey: "showQoderCliCN") as? Bool ?? true
                     let showZ = ud.object(forKey: "showZcode") as? Bool ?? true
                     let showM = ud.object(forKey: "showMimoCode") as? Bool ?? true
+                    let showTrae = ud.object(forKey: "showTrae") as? Bool ?? true
+                    let showTraeCN = ud.object(forKey: "showTraeCN") as? Bool ?? true
                     var total = 0
                     if showC { let r = u.claude.ranges.get(.today); total += Int(r.in + r.out + r.cr + r.cw) }
                     if showX {
@@ -467,6 +469,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                     if showQoderCliCN { let r = u.qodercliCN.ranges.get(.today); total += r.totalTokens }
                     if showZ { let r = u.zcode.ranges.get(.today); total += Int(r.in + r.out + r.cr + r.cw + r.reason) }
                     if showM { let r = u.mimocode.ranges.get(.today); total += Int(r.in + r.out + r.cr + r.cw + r.reason) }
+                    if showTrae { let r = u.trae.ranges.get(.today); total += Int(r.in + r.out + r.cr + r.cw + r.reason) }
+                    if showTraeCN { let r = u.traeCN.ranges.get(.today); total += Int(r.in + r.out + r.cr + r.cw + r.reason) }
                     if total > 0 {
                         metrics.append(.init(kind: .total, value: Fmt.human(total)))
                     } else {

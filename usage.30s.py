@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# TOKEI_COLLECTOR_REVISION=13
+# TOKEI_COLLECTOR_REVISION=14
 # <bitbar.title>AI Usage Bar</bitbar.title>
 # <bitbar.version>v0.1</bitbar.version>
 # <bitbar.author>local</bitbar.author>
@@ -22,6 +22,8 @@
 #   WorkBuddy AI:~/.workbuddy-ai/projects/**/*.jsonl (国际版,同结构独立统计)
 #   Qoder CLI:   ~/.qoder/projects/**/*.jsonl (Agent transcript,按 request_id 跨文件去重)
 #   Qoder CN:    ~/.qoder-cn/projects/**/*.jsonl (国内版,同结构独立统计 qodercli_cn)
+#   Trae / Trae CN: ~/.trae(-cn)/hub_event_cache/TraeCode/*/<task>.jsonl
+#                (token_usage 事件明文用量;缓存随任务清理,靠增量扫描+账本按任务留存日快照)
 #   CodeBuddy:   ~/.codebuddy/projects/**/*.jsonl (逐次模型调用 message.usage)
 #   Grok Bot:    ~/Library/Application Support/Grok Bot/sand-client-persistence/*.blob
 #                (本地会话活动；当前快照不含 Token / 模型 / 成本)
@@ -11027,6 +11029,218 @@ def scan_qodercli(bounds, cache, tool="qodercli"):
     return {"ranges": B, "model": fc.get("_model")}
 
 
+# ---------- Trae / Trae CN ----------
+# Trae（字节 AI IDE）把会话事件流写到 ~/.trae(-cn)/hub_event_cache/TraeCode/<账号>/<任务>.jsonl。
+# 其中 token_usage 事件带明文用量（prompt/completion/reasoning/两档缓存），
+# model_config 给出模型名。国际版与 CN 版结构相同，分别成键 trae / trae_cn。
+# 这份缓存只在任务活跃时存在、结束后会被删除，因此：
+#   1. 每轮整文件重解析（文件小、事件自带 seq，天然幂等）；
+#   2. 账本按任务文件留存每日快照（_ledger_file_sources），文件消失后已采数据不丢，
+#      文件重建后同任务快照整体替换而非累加。
+# 局限：Tokei 未运行且缓存被清理期间的用量无法回填。
+_TRAE_PARSER_VERSION = 1
+_TRAE_LEDGER_VERSION = 1
+_TRAE_DIRS = {
+    "trae": (os.path.join(HOME, ".trae", "hub_event_cache"), "TOKEI_TRAE_DIR", "Trae"),
+    "trae_cn": (os.path.join(HOME, ".trae-cn", "hub_event_cache"), "TOKEI_TRAE_CN_DIR",
+                "Trae CN"),
+}
+
+
+def _trae_dir(tool):
+    default, env_name, _label = _TRAE_DIRS[tool]
+    return os.path.abspath(os.path.expanduser(os.environ.get(env_name, default)))
+
+
+def _empty_trae():
+    return {"ranges": _empty_token_ranges()}
+
+
+def _trae_json_obj(value):
+    """事件流里的 data/metadata 可能是 dict，也可能是 JSON 字符串。"""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            parsed = json.loads(value)
+        except (json.JSONDecodeError, ValueError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _trae_int(value):
+    try:
+        return max(int(value or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _trae_model_name(value):
+    """去掉 Trae 内部环境后缀（qwen3.8-flash__dev → qwen3.8-flash），便于查价。"""
+    if not isinstance(value, str):
+        return None
+    name = value.strip()
+    if not name:
+        return None
+    return name.split("__", 1)[0] if "__" in name else name
+
+
+def _trae_event_dt(row, data, meta, file_mtime):
+    """事件时刻：字段位置不固定，逐个尝试；全部缺失时退回文件 mtime（任务缓存存活很短）。"""
+    for source in (data, meta, row):
+        if not isinstance(source, dict):
+            continue
+        for key in ("timestamp", "created_at", "ts", "time"):
+            value = source.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            seconds = value / 1000.0 if value > 1e11 else float(value)
+            try:
+                dt = datetime.fromtimestamp(seconds)
+            except (OverflowError, OSError, ValueError):
+                continue
+            if dt.year >= 2020:
+                return dt
+    return datetime.fromtimestamp(file_mtime)
+
+
+def _parse_trae_file(path, file_mtime):
+    """解析单个 Trae 事件流：token_usage 按 seq 去重聚合到天。"""
+    days = {}
+    model = None
+    seen_seq = set()
+    task_id = os.path.splitext(os.path.basename(path))[0]
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except (json.JSONDecodeError, ValueError):
+                continue
+            if not isinstance(row, dict):
+                continue
+            typ = row.get("type")
+            if typ == "model_config":
+                cfg = _trae_json_obj(row.get("data"))
+                name = _trae_model_name(cfg.get("model_name") or cfg.get("model"))
+                if name:
+                    model = name
+                continue
+            if typ != "token_usage":
+                continue
+            seq = row.get("seq")
+            if seq is None:
+                seq = line
+            if seq in seen_seq:
+                continue
+            seen_seq.add(seq)
+            data = _trae_json_obj(row.get("data"))
+            meta = _trae_json_obj(row.get("metadata"))
+            cr = _trae_int(data.get("cache_read_input_tokens"))
+            cw = _trae_int(data.get("cache_creation_input_tokens"))
+            out = _trae_int(data.get("completion_tokens"))
+            reason = _trae_int(data.get("reasoning_tokens"))
+            inp = max(_trae_int(data.get("prompt_tokens")) - cr - cw, 0)
+            if inp + out + cr + cw + reason == 0:
+                continue
+            dt = _trae_event_dt(row, data, meta, file_mtime)
+            dk = dt.date().isoformat()
+            day = days.setdefault(dk, {"in": 0, "out": 0, "cr": 0, "cw": 0,
+                                       "reason": 0, "cost": 0.0, "credits": 0.0,
+                                       "models": {}, "hours": [0] * 24,
+                                       "sessions": [],
+                                       "_cost_version": _TRAE_LEDGER_VERSION})
+            day["in"] += inp; day["out"] += out
+            day["cr"] += cr; day["cw"] += cw; day["reason"] += reason
+            total = inp + out + cr + cw + reason
+            day["hours"][dt.hour] += total
+            if task_id not in day["sessions"]:
+                day["sessions"].append(task_id)
+            event_model = (_trae_model_name(data.get("model") or meta.get("model"))
+                           or model or "unknown")
+            _add_model_usage(day["models"], event_model, inp, out, cr, cw, reason)
+    return {"days": days, "model": model}
+
+
+def scan_trae(bounds, cache, tool="trae_cn"):
+    ledger_touch(tool)
+    fc = cache.setdefault(tool, {})
+    if fc.get("_parser") != _TRAE_PARSER_VERSION:
+        fc.clear()
+        fc["_parser"] = _TRAE_PARSER_VERSION
+        cache["_dirty"] = True
+    root = _trae_dir(tool)
+    paths = sorted(glob.glob(os.path.join(root, "TraeCode", "*", "*.jsonl")))
+
+    stale = {key for key in fc if not key.startswith("_")}
+    latest_model = fc.get("_model")
+    latest_mtime = -1
+    for path in paths:
+        stale.discard(path)
+        try:
+            st = os.stat(path)
+        except OSError:
+            continue
+        sig = f"{st.st_size}|{st.st_mtime_ns}"
+        entry = fc.get(path)
+        if (isinstance(entry, dict) and entry.get("sig") == sig
+                and entry.get("parser") == _TRAE_PARSER_VERSION):
+            continue
+        try:
+            parsed = _parse_trae_file(path, st.st_mtime)
+        except OSError:
+            continue
+        fc[path] = {"sig": sig, "parser": _TRAE_PARSER_VERSION,
+                    "days": parsed["days"], "model": parsed["model"]}
+        cache["_dirty"] = True
+        if parsed["model"] and st.st_mtime_ns > latest_mtime:
+            latest_mtime = st.st_mtime_ns
+            latest_model = parsed["model"]
+    for path in stale:
+        fc.pop(path, None)
+        cache["_dirty"] = True
+    if latest_model and fc.get("_model") != latest_model:
+        fc["_model"] = latest_model
+        cache["_dirty"] = True
+
+    B = _empty_token_ranges()
+    live_days = {}
+    for path, entry in fc.items():
+        if path.startswith("_") or not isinstance(entry, dict):
+            continue
+        for dk, day in entry.get("days", {}).items():
+            try:
+                date.fromisoformat(dk)
+            except ValueError:
+                continue
+            agg = live_days.setdefault(dk, {"in": 0, "out": 0, "cr": 0, "cw": 0,
+                                            "reason": 0, "cost": 0.0, "credits": 0.0,
+                                            "models": {}, "hours": [0] * 24,
+                                            "sessions": [],
+                                            "_cost_version": _TRAE_LEDGER_VERSION})
+            _merge_live_token_day(agg, day)
+            agg["sessions"] = sorted(set(agg["sessions"]) | set(day.get("sessions", [])))
+
+    merged_days = ledger_reconcile(tool, live_days, _ledger_file_sources(fc))
+    if live_days and _LEDGER_CACHE.get("dirty"):
+        # Trae 事件缓存随任务结束即被清理，且每轮采集是独立进程：
+        # 本轮账本一旦有变化必须立即落盘，否则会被 ledger_flush 的
+        # 当日节流（600s）推迟，文件删了就永久丢数。
+        _LEDGER_CACHE["urgent"] = True
+    for dk, day in merged_days.items():
+        try:
+            d = date.fromisoformat(dk)
+        except ValueError:
+            continue
+        for key in classify_date(d, bounds):
+            _merge_token_day(B[key], day)
+            B[key]["sessions"].update(day.get("sessions", []))
+    return {"ranges": B}
+
+
 # 解析口径版本。加 1 可让旧缓存失效重扫（例如新增了按项目的用量拆分）。
 _HERMES_SCAN_VERSION = 2
 
@@ -17190,6 +17404,10 @@ def compute(local_only=False):
     qcli = _safe_scan("qodercli", lambda: scan_qodercli(bounds, cache), _empty_qodercli, errors)
     qcli_cn = _safe_scan("qodercli_cn", lambda: scan_qodercli(bounds, cache, tool="qodercli_cn"),
                          _empty_qodercli, errors)
+    trae = _safe_scan("trae", lambda: scan_trae(bounds, cache, tool="trae"),
+                      _empty_trae, errors)
+    trae_cn = _safe_scan("trae_cn", lambda: scan_trae(bounds, cache, tool="trae_cn"),
+                         _empty_trae, errors)
     hm = _safe_scan("hermes", lambda: scan_hermes(bounds, cache), _empty_hermes, errors)
     zc = _safe_scan("zcode", lambda: scan_zcode(bounds, cache), _empty_zcode, errors)
     dv = _safe_scan("devin", lambda: scan_devin(bounds, cache), _empty_devin, errors)
@@ -17370,6 +17588,8 @@ def compute(local_only=False):
 
     piranges = {k: token_usage_range(pi["ranges"][k]) for k in RANGE_KEYS}
     paranges = {k: token_usage_range(prime["ranges"][k]) for k in RANGE_KEYS}
+    tranges = {k: token_usage_range(trae["ranges"][k]) for k in RANGE_KEYS}
+    tcnranges = {k: token_usage_range(trae_cn["ranges"][k]) for k in RANGE_KEYS}
     zcranges = {k: token_usage_range(zc["ranges"][k]) for k in RANGE_KEYS}
     dvranges = {k: token_usage_range(dv["ranges"][k]) for k in RANGE_KEYS}
     mmranges = {k: token_usage_range(mm["ranges"][k]) for k in RANGE_KEYS}
@@ -17505,6 +17725,12 @@ def compute(local_only=False):
             "ranges": qclicnranges,
             "model": qcli_cn.get("model"),
         },
+        "trae": {
+            "ranges": tranges,
+        },
+        "trae_cn": {
+            "ranges": tcnranges,
+        },
         "hermes": {
             "ranges": hranges,
         },
@@ -17576,7 +17802,8 @@ def _recalc_costs(result):
     """只重算缺少权威账单的工具；已有日志成本的工具保留原值。"""
     for tool_key in ("gemini", "grok", "hermes", "zcode", "mimocode", "workbuddy",
                      "workbuddy_ai", "codebuddy",
-                     "deepseek_harness", "qwencode", "devin", "minimax"):
+                     "deepseek_harness", "qwencode", "devin", "minimax",
+                     "trae", "trae_cn"):
         tool = result.get(tool_key)
         if not tool or "ranges" not in tool:
             continue
@@ -17634,7 +17861,8 @@ def _recalc_costs(result):
                     cost = authoritative_cost or (
                         ti / 1e6 * p["in"] + (to + reason) / 1e6 * p["out"]
                         + cr / 1e6 * p["cache_read"] + cw / 1e6 * p["cache_write"])
-                elif tool_key in ("hermes", "zcode", "mimocode", "devin", "minimax"):
+                elif tool_key in ("hermes", "zcode", "mimocode", "devin", "minimax",
+                                  "trae", "trae_cn"):
                     cr = m.get("cr", 0)
                     cw = m.get("cw", 0)
                     reason = m.get("reason", 0)
@@ -18615,6 +18843,7 @@ def build_daily_costs(period="all", refresh=True, _cache=None):
     _empty = lambda: {"claude": 0.0, "codex": 0.0, "codex_reserve": 0.0,
                        "gemini": 0.0, "grok": 0.0,
                        "zcode": 0.0, "mimocode": 0.0, "devin": 0.0, "minimax": 0.0,
+                       "trae": 0.0, "trae_cn": 0.0,
                        "pi": 0.0,
                        "workbuddy": 0.0, "workbuddy_ai": 0.0, "codebuddy": 0.0,
                        "deepseek_harness": 0.0,
@@ -18780,7 +19009,8 @@ def build_daily_costs(period="all", refresh=True, _cache=None):
                 m[key] += mv.get(key, 0)
 
     for tool_key, suffix in (("zcode", "ZCode"), ("mimocode", "MiMoCode"),
-                             ("devin", "Devin"), ("minimax", "MiniMax Code")):
+                             ("devin", "Devin"), ("minimax", "MiniMax Code"),
+                             ("trae", "Trae"), ("trae_cn", "Trae CN")):
         for dk, day_data in _iter_cached_token_days(cache.get(tool_key, {})):
             if cutoff and dk < cutoff:
                 continue
@@ -18996,7 +19226,7 @@ def build_daily_costs(period="all", refresh=True, _cache=None):
         "claude", "codex", "codex_reserve", "gemini", "grok", "hermes", "openclaw", "zcode",
         "mimocode", "devin", "minimax", "pi", "workbuddy", "workbuddy_ai", "codebuddy",
         "deepseek_harness",
-        "opencode", "qwencode", "musecode", "cmdcode", "copilot"))
+        "opencode", "qwencode", "musecode", "cmdcode", "copilot", "trae", "trae_cn"))
     for tool, tool_days in _load_ledger().get("tools", {}).items():
         if not isinstance(tool_days, dict):
             continue
@@ -19050,6 +19280,7 @@ def build_daily_costs(period="all", refresh=True, _cache=None):
               "openclaw": round(v["openclaw"], 2),
               "zcode": round(v["zcode"], 2), "mimocode": round(v["mimocode"], 2),
               "devin": round(v["devin"], 2), "minimax": round(v["minimax"], 2),
+              "trae": round(v["trae"], 2), "trae_cn": round(v["trae_cn"], 2),
               "pi": round(v["pi"], 2),
               "workbuddy": round(v["workbuddy"], 2),
               "workbuddy_ai": round(v["workbuddy_ai"], 2),
@@ -19063,7 +19294,8 @@ def build_daily_costs(period="all", refresh=True, _cache=None):
               "prime_agent": round(v["prime_agent"], 2),
               "total": round(v["claude"] + v["codex"] + v["codex_reserve"]
                              + v["gemini"] + v["grok"] + v["zcode"]
-                             + v["mimocode"] + v["pi"] + v["workbuddy"] + v["workbuddy_ai"]
+                             + v["mimocode"] + v["trae"] + v["trae_cn"]
+                             + v["pi"] + v["workbuddy"] + v["workbuddy_ai"]
                              + v["codebuddy"]
                              + v["deepseek_harness"] + v["opencode"] + v["qwencode"]
                              + v["kimicode"] + v["musecode"] + v["cmdcode"] + v["copilot"]
@@ -19333,9 +19565,10 @@ def build_wrapped(period="all", refresh=True, _cache=None):
             name = f"{nice_model(model)} (OpenCode)"
             model_tok[name] = model_tok.get(name, 0) + token_total(usage)
 
-    # --- ZCode / MiMoCode / Devin / MiniMax Code ---
+    # --- ZCode / MiMoCode / Devin / MiniMax Code / Trae / Trae CN ---
     for tool_key, suffix in (("zcode", "ZCode"), ("mimocode", "MiMoCode"),
-                             ("devin", "Devin"), ("minimax", "MiniMax Code")):
+                             ("devin", "Devin"), ("minimax", "MiniMax Code"),
+                             ("trae", "Trae"), ("trae_cn", "Trae CN")):
         for dk, day in _iter_cached_token_days(cache.get(tool_key, {})):
             if cutoff and dk < cutoff:
                 continue

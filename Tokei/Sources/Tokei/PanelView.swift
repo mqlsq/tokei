@@ -24,6 +24,8 @@ struct PanelView: View {
     @State private var hermesModelsOpen = false
     @State private var zcodeModelsOpen = false
     @State private var mimocodeModelsOpen = false
+    @State private var traeModelsOpen = false
+    @State private var traeCNModelsOpen = false
     @State private var piModelsOpen = false
     @State private var primeAgentModelsOpen = false
     @State private var workBuddyModelsOpen = false
@@ -77,6 +79,8 @@ struct PanelView: View {
     @AppStorage("showHermes") private var showHermes = true
     @AppStorage("showZcode") private var showZcode = true
     @AppStorage("showMimoCode") private var showMimoCode = true
+    @AppStorage("showTrae") private var showTrae = true
+    @AppStorage("showTraeCN") private var showTraeCN = true
     @AppStorage("showOpenClaw") private var showOpenClaw = true
     @AppStorage("showPi") private var showPi = true
     @AppStorage("showPrimeAgent") private var showPrimeAgent = true
@@ -126,6 +130,7 @@ struct PanelView: View {
             qoder: showQoder, qoderwork: showQoderWork, qodercli: showQoderCli,
             qodercliCN: showQoderCliCN,
             hermes: showHermes, zcode: showZcode, mimocode: showMimoCode,
+            trae: showTrae, traeCN: showTraeCN,
             openclaw: showOpenClaw, pi: showPi, primeAgent: showPrimeAgent,
             workbuddy: showWorkBuddy, workbuddyAI: showWorkBuddyAI,
             codebuddy: showCodeBuddy,
@@ -442,6 +447,7 @@ struct PanelView: View {
         let qclir = u.qodercli.ranges.get(sel), qclicnr = u.qodercliCN.ranges.get(sel)
         let hr = u.hermes.ranges.get(sel)
         let zr = u.zcode.ranges.get(sel), mr = u.mimocode.ranges.get(sel)
+        let tr = u.trae.ranges.get(sel), tcr = u.traeCN.ranges.get(sel)
         let lr = u.openclaw.ranges.get(sel), pr = u.pi.ranges.get(sel)
         let par = u.prime_agent.ranges.get(sel)
         let wr = u.workbuddy.ranges.get(sel), wair = u.workbuddyAI.ranges.get(sel)
@@ -542,6 +548,10 @@ struct PanelView: View {
                          tint: Theme.zcode, content: AnyView(tokenUsageBlock(title: "ZCode", zr, tint: Theme.zcode, modelsOpen: $zcodeModelsOpen, toolID: "zcode"))),
             ToolCardItem(id: "mimocode", name: "MiMoCode", visible: showMimoCode, active: mr.sessions > 0,
                          tint: Theme.mimocode, content: AnyView(tokenUsageBlock(title: "MiMoCode", mr, tint: Theme.mimocode, modelsOpen: $mimocodeModelsOpen, toolID: "mimocode"))),
+            ToolCardItem(id: "trae", name: "Trae", visible: showTrae, active: tr.sessions > 0,
+                         tint: Theme.trae, content: AnyView(tokenUsageBlock(title: "Trae", tr, tint: Theme.trae, modelsOpen: $traeModelsOpen, toolID: "trae"))),
+            ToolCardItem(id: "trae_cn", name: "Trae CN", visible: showTraeCN, active: tcr.sessions > 0,
+                         tint: Theme.traeCN, content: AnyView(tokenUsageBlock(title: "Trae CN", tcr, tint: Theme.traeCN, modelsOpen: $traeCNModelsOpen, toolID: "trae_cn"))),
             ToolCardItem(id: "openclaw", name: "OpenClaw", visible: showOpenClaw,
                          active: lr.tasks > 0 || lr.in + lr.out + lr.cr + lr.cw + lr.reason > 0,
                          tint: Theme.openclaw, content: AnyView(openclawBlock(lr, modelsOpen: $openClawModelsOpen))),
@@ -3287,6 +3297,8 @@ struct PanelView: View {
                 settingsRow("Hermes", tint: Theme.hermes, isOn: $showHermes)
                 settingsRow("ZCode", tint: Theme.zcode, isOn: $showZcode)
                 settingsRow("MiMoCode", tint: Theme.mimocode, isOn: $showMimoCode)
+                settingsRow("Trae", tint: Theme.trae, isOn: $showTrae)
+                settingsRow("Trae CN", tint: Theme.traeCN, isOn: $showTraeCN)
                 settingsRow("OpenClaw", tint: Theme.openclaw, isOn: $showOpenClaw)
                 settingsRow("Pi", tint: Theme.pi, isOn: $showPi)
                 settingsRow("Prime Agent", tint: Theme.primeAgent, isOn: $showPrimeAgent)
@@ -4521,7 +4533,7 @@ struct PanelView: View {
             let tools = ["claude", "codex", "gemini", "antigravity", "cursor", "zed",
                          "sub2api", "zai", "grok", "grok_bot", "doubaowork", "qoder", "qoderwork", "qodercli",
                          "qodercli_cn", "hermes",
-                         "zcode", "mimocode", "openclaw", "pi", "workbuddy", "workbuddy_ai",
+                         "zcode", "mimocode", "trae", "trae_cn", "openclaw", "pi", "workbuddy", "workbuddy_ai",
                          "codebuddy",
                          "deepseek_harness",
                          "opencode", "qwencode", "qwenwork", "kimicode", "musecode", "cmdcode", "copilot", "prime_agent",

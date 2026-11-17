@@ -1364,6 +1364,10 @@ struct Usage: Codable {
     @Boxed var hermes: HermesStat
     @Boxed var zcode: TokenUsageStat
     @Boxed var mimocode: TokenUsageStat
+    /// Trae 国际版（~/.trae/hub_event_cache），事件缓存增量采集。
+    @Boxed var trae: TokenUsageStat
+    /// Trae CN（~/.trae-cn/hub_event_cache），与国际版同结构、单独统计。
+    @Boxed var traeCN: TokenUsageStat
     @Boxed var openclaw: OpenClawStat
     @Boxed var pi: TokenUsageStat
     @Boxed var prime_agent: TokenUsageStat
@@ -1390,6 +1394,7 @@ struct Usage: Codable {
         case claude, codex, gemini, grok, grokBot = "grok_bot"
         case doubaoWork = "doubaowork"
         case qoder, qoderwork, qodercli, qodercliCN = "qodercli_cn", hermes, zcode, mimocode
+        case trae, traeCN = "trae_cn"
         case openclaw, pi, workbuddy, workbuddyAI = "workbuddy_ai"
         case codebuddy
         case deepseekHarness = "deepseek_harness", opencode, qwencode
@@ -1415,6 +1420,8 @@ struct Usage: Codable {
         hermes = try c.decode(HermesStat.self, forKey: .hermes)
         zcode = try c.decodeIfPresent(TokenUsageStat.self, forKey: .zcode) ?? TokenUsageStat(ranges: .empty)
         mimocode = try c.decodeIfPresent(TokenUsageStat.self, forKey: .mimocode) ?? TokenUsageStat(ranges: .empty)
+        trae = try c.decodeIfPresent(TokenUsageStat.self, forKey: .trae) ?? TokenUsageStat(ranges: .empty)
+        traeCN = try c.decodeIfPresent(TokenUsageStat.self, forKey: .traeCN) ?? TokenUsageStat(ranges: .empty)
         openclaw = try c.decode(OpenClawStat.self, forKey: .openclaw)
         pi = try c.decodeIfPresent(TokenUsageStat.self, forKey: .pi) ?? TokenUsageStat(ranges: .empty)
         prime_agent = try c.decodeIfPresent(TokenUsageStat.self, forKey: .prime_agent) ?? TokenUsageStat(ranges: .empty)

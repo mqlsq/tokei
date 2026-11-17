@@ -45,6 +45,7 @@ Tokei 是一款 **macOS 菜单栏应用**，实时追踪 20+ 款 AI 编程工具
 | **Hermes** | Token、成本、缓存命中率、模型 |
 | **ZCode** | Token（输入/输出/缓存/推理）、成本、模型 |
 | **MiMoCode** | Token（输入/输出/缓存/推理）、成本、模型 |
+| **Trae / Trae CN** | Token（输入/输出/缓存/推理）、成本估算、会话、模型（事件缓存增量采集，需常驻运行） |
 | **OpenClaw** | Token、成本、任务、模型 |
 | **Pi Coding Agent CLI** | Token、成本、缓存命中率、模型、项目 |
 | **Prime Agent** | Token、成本、缓存命中率、模型、项目（含 RLM 子代理） |
@@ -236,6 +237,8 @@ chmod +x ~/.tokei/tokei-sync.sh
 | QoderWork | `~/Library/Application Support/QoderWork/data/agents.db` |
 | Qoder CLI | `~/.qoder/projects/**/*.jsonl` |
 | Qoder CN | `~/.qoder-cn/projects/**/*.jsonl`（可用 `TOKEI_QODERCLI_CN_DIR` 覆盖） |
+| Trae | `~/.trae/hub_event_cache/TraeCode/*/*.jsonl`（可用 `TOKEI_TRAE_DIR` 覆盖；事件缓存随任务清理，靠账本留存已采数据，安装前历史无法回填） |
+| Trae CN | `~/.trae-cn/hub_event_cache/TraeCode/*/*.jsonl`（可用 `TOKEI_TRAE_CN_DIR` 覆盖；同上） |
 | ZCode | `~/.zcode/cli/db/db.sqlite` |
 | MiMoCode | `~/Library/Application Support/mimocode/mimocode*.db` 或 `~/.local/share/mimocode/mimocode*.db` |
 | Devin | Token：`~/.local/share/devin/cli/sessions.db`；额度：`~/Library/Application Support/{Devin,Windsurf}/User/globalStorage/state.vscdb`（桌面端启动时写入的套餐缓存，落款取自 `logs/` 目录名） |

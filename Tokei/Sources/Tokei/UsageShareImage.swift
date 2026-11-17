@@ -138,6 +138,8 @@ enum UsageShareImage {
         case "Hermes": return Theme.hermes
         case "ZCode": return Theme.zcode
         case "MiMoCode": return Theme.mimocode
+        case "Trae": return Theme.trae
+        case "Trae CN": return Theme.traeCN
         case "OpenClaw": return Theme.openclaw
         case "Pi": return Theme.pi
         case "WorkBuddy": return Theme.workbuddy

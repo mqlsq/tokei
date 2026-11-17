@@ -410,6 +410,8 @@ struct DashboardView: View {
         case "hermes": return Theme.hermes
         case "zcode": return Theme.zcode
         case "mimocode": return Theme.mimocode
+        case "trae": return Theme.trae
+        case "trae_cn": return Theme.traeCN
         case "openclaw": return Theme.openclaw
         case "pi": return Theme.pi
         case "prime_agent": return Theme.primeAgent
@@ -1128,6 +1130,8 @@ struct DashboardView: View {
         appendTokenModels(usage.hermes.ranges.get(key).models, tool: "hermes", suffix: "Hermes", to: &out)
         appendTokenModels(usage.zcode.ranges.get(key).models, tool: "zcode", suffix: "ZCode", to: &out)
         appendTokenModels(usage.mimocode.ranges.get(key).models, tool: "mimocode", suffix: "MiMoCode", to: &out)
+        appendTokenModels(usage.trae.ranges.get(key).models, tool: "trae", suffix: "Trae", to: &out)
+        appendTokenModels(usage.traeCN.ranges.get(key).models, tool: "trae_cn", suffix: "Trae CN", to: &out)
         appendTokenModels(usage.openclaw.ranges.get(key).models, tool: "openclaw", suffix: "OpenClaw", to: &out)
         appendTokenModels(usage.pi.ranges.get(key).models, tool: "pi", suffix: "Pi", to: &out)
         appendTokenModels(usage.prime_agent.ranges.get(key).models, tool: "prime_agent", suffix: "Prime Agent", to: &out)
@@ -1206,6 +1210,8 @@ struct DashboardView: View {
             + hermesTotal(usage.hermes.ranges.get(key))
             + tokenUsageTotal(usage.zcode.ranges.get(key))
             + tokenUsageTotal(usage.mimocode.ranges.get(key))
+            + tokenUsageTotal(usage.trae.ranges.get(key))
+            + tokenUsageTotal(usage.traeCN.ranges.get(key))
             + openClawTotal(usage.openclaw.ranges.get(key))
             + tokenUsageTotal(usage.pi.ranges.get(key))
             + tokenUsageTotal(usage.workbuddy.ranges.get(key))
@@ -1230,6 +1236,8 @@ struct DashboardView: View {
             + usage.hermes.ranges.get(key).cost
             + usage.zcode.ranges.get(key).cost
             + usage.mimocode.ranges.get(key).cost
+            + usage.trae.ranges.get(key).cost
+            + usage.traeCN.ranges.get(key).cost
             + usage.openclaw.ranges.get(key).cost
             + usage.pi.ranges.get(key).cost
              + usage.prime_agent.ranges.get(key).cost

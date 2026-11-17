@@ -491,6 +491,8 @@ final class SyncManager {
             mergeRanges(&u.hermes.ranges, peer.usage.hermes.ranges, pairs)
             mergeRanges(&u.zcode.ranges, peer.usage.zcode.ranges, pairs)
             mergeRanges(&u.mimocode.ranges, peer.usage.mimocode.ranges, pairs)
+            mergeRanges(&u.trae.ranges, peer.usage.trae.ranges, pairs)
+            mergeRanges(&u.traeCN.ranges, peer.usage.traeCN.ranges, pairs)
             mergeRanges(&u.openclaw.ranges, peer.usage.openclaw.ranges, pairs)
             mergeRanges(&u.pi.ranges, peer.usage.pi.ranges, pairs)
             mergeRanges(&u.prime_agent.ranges, peer.usage.prime_agent.ranges, pairs)

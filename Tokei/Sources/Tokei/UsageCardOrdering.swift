@@ -52,6 +52,8 @@ enum UsageCardOrdering {
         switch id {
         case "zcode": r = u.zcode.ranges.get(range)
         case "mimocode": r = u.mimocode.ranges.get(range)
+        case "trae": r = u.trae.ranges.get(range)
+        case "trae_cn": r = u.traeCN.ranges.get(range)
         case "pi": r = u.pi.ranges.get(range)
         case "prime_agent": r = u.prime_agent.ranges.get(range)
         case "workbuddy": r = u.workbuddy.ranges.get(range)

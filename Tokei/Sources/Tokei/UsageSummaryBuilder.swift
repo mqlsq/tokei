@@ -19,6 +19,8 @@ struct UsageToolVisibility: Equatable {
     var hermes = true
     var zcode = true
     var mimocode = true
+    var trae = true
+    var traeCN = true
     var openclaw = true
     var pi = true
     var primeAgent = true
@@ -352,6 +354,12 @@ enum UsageSummaryBuilder {
         }
         if visibility.mimocode {
             appendTokenTool(&lines, id: "mimocode", name: "MiMoCode", range: usage.mimocode.ranges.get(range))
+        }
+        if visibility.trae {
+            appendTokenTool(&lines, id: "trae", name: "Trae", range: usage.trae.ranges.get(range))
+        }
+        if visibility.traeCN {
+            appendTokenTool(&lines, id: "trae_cn", name: "Trae CN", range: usage.traeCN.ranges.get(range))
         }
         if visibility.openclaw {
             let r = usage.openclaw.ranges.get(range)

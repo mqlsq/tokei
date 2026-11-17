@@ -62,6 +62,8 @@ enum Theme {
     static let hermes = Color(red: 0.40, green: 0.82, blue: 0.60)   // 翠绿
     static let zcode = Color(red: 0.52, green: 0.80, blue: 0.34)    // 青柠绿
     static let mimocode = Color(red: 0.95, green: 0.50, blue: 0.26) // 暖橙
+    static let trae = Color(red: 0.31, green: 0.42, blue: 0.96)      // Trae 靛蓝
+    static let traeCN = Color(red: 0.18, green: 0.68, blue: 0.86)    // Trae CN 湖蓝
     static let openclaw = Color(red: 0.85, green: 0.45, blue: 0.68) // 玫红
     static let pi = Color(red: 0.74, green: 0.58, blue: 0.95)       // 柔紫
     static let primeAgent = Color(red: 0.96, green: 0.58, blue: 0.28) // 活力橙
